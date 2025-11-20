@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard - IA Nanda Mac</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Inter', Arial, sans-serif; background: #f9fafb; margin:0; color:#232d3b;}
+    .container { max-width: 950px; margin: 2rem auto; background: #fff; border-radius: 22px; box-shadow: 0 2px 16px #36548614; padding: 2.1rem 2.7rem 2.1rem 2.7rem;}
+    h1 { color: #365486; font-weight: 700; margin-bottom: 0.7rem; font-size: 2.0rem;}
+    .metrics { display: flex; gap: 2.2rem; margin-bottom: 2.3rem;}
+    .metric-box { flex:1; background: #f8fafc; padding: 1.1rem 1.7rem; border-radius: 18px; box-shadow: 0 2px 8px #3654860c;}
+    .metric-title { color:#555b6a; font-size: 1.04rem; font-weight: 500;}
+    .metric-value { font-size: 2.05rem; font-weight: 700; color: #365486;}
+    .filters { margin-bottom: 2.1rem; display:flex; gap: 1.2rem;}
+    .filters label { font-weight:500; color:#365486;}
+    .filters input, .filters select {padding:0.4rem 0.8rem; border:1.2px solid #b4c8e9; border-radius:8px; font-size: 1.01rem;}
+    .btn { padding:0.55rem 1.5rem; border-radius:9px; border:none; background:#365486; color:#fff; font-weight:700; cursor:pointer;}
+    .btn:hover { background:#5893df; }
+    .logs-table {width:100%; border-collapse:collapse; margin-top:1.2rem;}
+    .logs-table th, .logs-table td {padding:0.6rem 0.8rem; border:1px solid #e4e6ea;}
+    .logs-table th {background:#f8fafc;}
+    .logs-table tr:nth-child(even) {background:#f1f4fa;}
+    .section-title { font-size:1.13rem; color:#365486; font-weight:600; margin:2.2rem 0 1.1rem;}
+    .chart-box {margin-bottom:2.1rem;}
+    @media(max-width:800px){.container{padding:1rem}.metrics,.filters{flex-direction:column;gap:1rem}}
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Dashboard da IA Nanda Mac</h1>
+  <div class="metrics">
+    <div class="metric-box">
+      <div class="metric-title">Alunos únicos</div>
+      <div class="metric-value">{{ total_usuarios or 0 }}</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-title">Perguntas respondidas</div>
+      <div class="metric-value">{{ total_perguntas or 0 }}</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-title">Exportação</div>
+      <form action="/dashboard/export" method="get" style="display:inline;">
+        <input type="hidden" name="usuario" value="{{ filtro_usuario }}">
+        <input type="hidden" name="modulo" value="{{ filtro_modulo }}">
+        <input type="hidden" name="palavra" value="{{ filtro_palavra }}">
+        <input type="hidden" name="data_inicio" value="{{ filtro_data_inicio }}">
+        <input type="hidden" name="data_fim" value="{{ filtro_data_fim }}">
+        <button class="btn" type="submit">Exportar CSV</button>
+      </form>
+    </div>
+  </div>
+  
+  <form method="get" class="filters">
+    <label>Usuário <input type="text" name="usuario" value="{{ filtro_usuario }}"></label>
+    <label>Módulo <input type="text" name="modulo" value="{{ filtro_modulo }}"></label>
+    <label>Palavra-chave <input type="text" name="palavra" value="{{ filtro_palavra }}"></label>
+    <label>Data início <input type="date" name="data_inicio" value="{{ filtro_data_inicio }}"></label>
+    <label>Data fim <input type="date" name="data_fim" value="{{ filtro_data_fim }}"></label>
+    <button class="btn" type="submit">Filtrar</button>
+  </form>
+
+  <div class="chart-box">
+    <div class="section-title">Perguntas por Dia</div>
+    <canvas id="chartPerguntasDia" height="80"></canvas>
+  </div>
+  <div class="chart-box">
+    <div class="section-title">Dúvidas Mais Frequentes</div>
+    <canvas id="chartMaisFrequentes" height="70"></canvas>
+  </div>
+
+  <div class="section-title">Logs Detalhados</div>
+  <table class="logs-table">
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Usuário</th>
+        <th>Módulo</th>
+        <th>Aula</th>
+        <th>Pergunta</th>
+        <th>Resposta</th>
+      </tr>
+    </thead>
+    <tbody>
+  {% for row in logs %}
+  <tr>
+    <td>{{ row.data }}</td>
+    <td>{{ row.usuario }}</td>
+    <td>{{ row.modulo }}</td>
+    <td>{{ row.aula }}</td>
+    <td>{{ row.pergunta[:80] }}{% if row.pergunta|length > 80 %}...{% endif %}</td>
+    <td>{{ row.resposta|striptags|truncate(120) }}</td>
+  </tr>
+  {% endfor %}
+</tbody>
+
+  </table>
+</div>
+
+<script>
+  // Perguntas por dia
+  const dataPerguntas = {{ perguntas_por_dia|map(attribute='dia')|list|tojson }};
+  const totalPerguntas = {{ perguntas_por_dia|map(attribute='total')|list|tojson }};
+  new Chart(document.getElementById('chartPerguntasDia').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dataPerguntas,
+      datasets: [{
+        label: 'Perguntas',
+        data: totalPerguntas,
+        backgroundColor: '#5893df33',
+        borderColor: '#365486',
+        fill: true,
+        tension: 0.25
+      }]
+    },
+    options: {
+      plugins: {legend: {display:false}},
+      scales: {y: {beginAtZero:true}}
+    }
+  });
+
+  // Dúvidas mais frequentes
+  const labelsFrequentes = {{ perguntas_mais_frequentes|map(attribute='pergunta')|list|tojson }};
+  const dataFrequentes = {{ perguntas_mais_frequentes|map(attribute='total')|list|tojson }};
+  new Chart(document.getElementById('chartMaisFrequentes').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: labelsFrequentes,
+      datasets: [{
+        label: 'Perguntas',
+        data: dataFrequentes,
+        backgroundColor: '#365486',
+      }]
+    },
+    options: {
+      plugins: {legend: {display:false}},
+      indexAxis: 'y',
+      scales: {x: {beginAtZero:true}}
+    }
+  });
+</script>
+</body>
+</html>
